@@ -95,13 +95,17 @@ namespace discord {
             return *this;
         }
 
+        // Start a fresh reconnect cycle after a manual reinitialization.
+        m_nextConnect = std::chrono::system_clock::now();
+        Backoff::get().reset();
+
+        m_processID = platform::getProcessID();
+        m_initialized = true;
+
         m_ioWorker = new(std::nothrow) IOWorker();
         if (m_ioWorker) {
             m_ioWorker->start();
         }
-
-        m_processID = platform::getProcessID();
-        m_initialized = true;
 
         return *this;
     }
@@ -111,16 +115,17 @@ namespace discord {
             return *this;
         }
 
+        // Stop accepting updates before stopping the worker.  In particular,
+        // shutdown must not reopen a dead IPC connection.
+        m_initialized = false;
+
         if (m_ioWorker) {
             delete m_ioWorker;
             m_ioWorker = nullptr;
         }
 
         this->clearPresence();
-        this->update();
-
         Connection::destroyInstance();
-        m_initialized = false;
 
         return *this;
     }
